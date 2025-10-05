@@ -1,4 +1,3 @@
-// lib/screens/dashboard_screen.dart
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -22,12 +21,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<Map<String, dynamic>> _fetchWellbeingData() async {
     final userId = Supabase.instance.client.auth.currentUser!.id;
+
+    // Fetch up to 30 logs ordered by date
     final response = await Supabase.instance.client
         .from('wellbeing_logs')
         .select('created_at, mood_rating')
         .eq('user_id', userId)
         .order('created_at', ascending: true)
-        .limit(30);
+        .limit(30) as List; // Cast to List for type safety
 
     if (response.isEmpty) {
       return {'spots': <FlSpot>[], 'dates': <DateTime>[]};
@@ -37,10 +38,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final List<DateTime> dates = [];
     for (var i = 0; i < response.length; i++) {
       final log = response[i];
-      spots.add(FlSpot(i.toDouble(), log['mood_rating'].toDouble()));
+      double rating = log['mood_rating'].toDouble();
+      spots.add(FlSpot(i.toDouble(), rating));
       dates.add(DateTime.parse(log['created_at']));
     }
 
+    // Ensure at least two points for the chart to draw if only one log exists
     if (spots.length == 1) {
       spots.add(FlSpot(1, spots[0].y));
       dates.add(dates[0].add(const Duration(days: 1)));
@@ -61,6 +64,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
           }
+
           final spots = snapshot.data?['spots'] as List<FlSpot>?;
           final dates = snapshot.data?['dates'] as List<DateTime>?;
 
@@ -92,6 +96,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     LineChartData(
                       gridData: FlGridData(
                         show: true,
+                        drawVerticalLine: false,
                         getDrawingHorizontalLine: (value) {
                           return const FlLine(
                             color: Colors.white12,
@@ -125,7 +130,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           sideTitles: SideTitles(
                             showTitles: true,
                             reservedSize: 22,
-                            interval: (spots.length / 2).toDouble(),
+                            interval: (spots.length / 2).toDouble() == 0 ? 1 : (spots.length / 2).toDouble(),
                             getTitlesWidget: (value, meta) {
                               if (value.toInt() >= dates.length) return Container();
                               final date = dates[value.toInt()];
@@ -134,10 +139,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ),
                         ),
                       ),
-                      // --- FINAL CORRECTED TOOLTIP SECTION ---
                       lineTouchData: LineTouchData(
                         touchTooltipData: LineTouchTooltipData(
-                          getTooltipColor: (LineBarSpot spot) => Colors.blueGrey, // This is the correct property
+                          getTooltipColor: (LineBarSpot spot) => Colors.blueGrey,
                           getTooltipItems: (List<LineBarSpot> touchedSpots) {
                             return touchedSpots.map((spot) {
                               return LineTooltipItem(
@@ -147,6 +151,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             }).toList();
                           },
                         ),
+                        handleBuiltInTouches: true,
                       ),
                       borderData: FlBorderData(show: true, border: Border.all(color: Colors.white12)),
                       minY: 1,
@@ -165,6 +170,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             show: true,
                             gradient: LinearGradient(
                               colors: [Colors.cyan.withOpacity(0.3), Colors.blue.withOpacity(0.3)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
                             ),
                           ),
                         ),
